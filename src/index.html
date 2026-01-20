@@ -1,32 +1,183 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <link rel="stylesheet" href="styles.css" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus App</title>
-        <script type="module" src="/main.js" defer></script>
-    </head>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>全能混淆生成器 - 离线版</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
+        .card { background: white; max-width: 700px; margin: 0 auto; padding: 25px; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
+        h2 { border-left: 5px solid #1976D2; padding-left: 10px; font-size: 20px; }
+        .section { margin-bottom: 25px; }
+        input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-family: "Consolas", monospace; }
+        .btn { background: #1976D2; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 10px; }
+        .btn:hover { background: #1565C0; }
+        .btn-copy { background: #43A047; margin-top: 5px; }
+        .result-box { margin-top: 15px; padding: 15px; background: #fafafa; border: 1px dashed #bbb; min-height: 50px; text-align: center; overflow-x: auto; }
+        .label { font-weight: bold; margin-bottom: 8px; display: block; }
+        .hint { font-size: 12px; color: #777; margin-top: 4px; }
+        img { image-rendering: pixelated; max-width: 100%; }
+    </style>
+</head>
+<body>
 
-    <body>
-        <main class="container">
-            <h1>Welcome to PakePlus</h1>
-            <form class="row" id="greet-form">
-                <input id="inputValue" placeholder="Enter a something..." />
-            </form>
-            <div class="resultBox">
-                <span>result: </span>
-                <span id="result"></span>
-            </div>
-            <div class="invokeBox">
-                <button id="openUrl">open_url_browser</button>
-                <button id="openUrlNew">open_url_new</button>
-                <button id="runCommand">run_command</button>
-                <button id="downloadFile">download_file</button>
-                <button id="getExeDir">get_exe_dir</button>
-                <button id="getEnvVar">get_env_var</button>
-                <button id="findPort">find_port</button>
-            </div>
-        </main>
-    </body>
+<div class="card">
+    <div class="section">
+        <span class="label">✨ 文本/URL 暴力混淆 (插入零宽字符)</span>
+        <input type="text" id="textInput" placeholder="输入需要混淆的文字或链接...">
+        <button class="btn" onclick="obfuscateText()">立即混淆并复制</button>
+        <div id="textStatus" class="hint"></div>
+    </div>
+
+    <hr>
+
+    <div class="section">
+        <span class="label">🖼️ 数字图片拼接 (PNG/GIF)</span>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <input type="text" id="numInput" placeholder="输入数字 (如: 123)" style="flex: 2;">
+            <select id="formatSelect" style="flex: 1; border-radius: 6px; border: 1px solid #ddd;">
+                <option value="png">静态 PNG</option>
+                <option value="gif">动态 GIF</option>
+            </select>
+        </div>
+        <button class="btn" style="background: #ef6c00;" onclick="generateCollage()">生成拼图</button>
+        
+        <div class="result-box" id="imageResult">
+            <span style="color: #ccc;">生成的结果将显示在这里</span>
+        </div>
+        <button id="dlBtn" class="btn btn-copy" style="display:none;" onclick="downloadImage()">下载生成的图片</button>
+    </div>
+</div>
+
+<script src="lib/gif.js"></script>
+
+<script>
+    const BOM = '\ufeff'; // 零宽不换行空格
+
+    // === 逻辑 1: 文本混淆 ===
+    function obfuscateText() {
+        const input = document.getElementById('textInput').value;
+        if (!input) return;
+        
+        // 每个字符间插入零宽字符
+        const result = input.split('').join(BOM);
+        
+        // 复制到剪贴板
+        navigator.clipboard.writeText(result).then(() => {
+            document.getElementById('textStatus').innerText = "✅ 已复制混淆文本！粘贴时外表看不出区别，但机器无法直接识别。";
+            document.getElementById('textStatus').style.color = "#43A047";
+        });
+    }
+
+    // === 逻辑 2: 图片拼接 ===
+    let currentBlobUrl = null;
+
+    async function generateCollage() {
+        const nums = document.getElementById('numInput').value.replace(/[^0-9]/g, '');
+        const format = document.getElementById('formatSelect').value;
+        const resultDiv = document.getElementById('imageResult');
+        const dlBtn = document.getElementById('dlBtn');
+
+        if (!nums) { alert("请输入数字"); return; }
+        
+        resultDiv.innerHTML = "处理中...";
+        dlBtn.style.display = "none";
+
+        try {
+            if (format === 'png') {
+                const url = await createPngCollage(nums);
+                showResult(url);
+            } else {
+                // GIF 逻辑需要你确保 lib 目录下有 gif.js 和 gif.worker.js
+                const url = await createGifCollage(nums);
+                showResult(url);
+            }
+        } catch (err) {
+            resultDiv.innerHTML = "生成失败，请检查 assets 目录下图片是否存在";
+            console.error(err);
+        }
+    }
+
+    function showResult(url) {
+        currentBlobUrl = url;
+        const resultDiv = document.getElementById('imageResult');
+        resultDiv.innerHTML = `<img src="${url}" />`;
+        document.getElementById('dlBtn').style.display = "block";
+    }
+
+    function downloadImage() {
+        const a = document.createElement('a');
+        a.href = currentBlobUrl;
+        a.download = `collage_${Date.now()}`;
+        a.click();
+    }
+
+    // PNG 拼接逻辑
+    async function createPngCollage(nums) {
+        const images = await Promise.all(nums.split('').map(n => loadImage(`assets/danbooru/${n}.png`)));
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const totalWidth = images.reduce((s, img) => s + img.width, 0);
+        const height = images[0].height;
+        
+        canvas.width = totalWidth;
+        canvas.height = height;
+        
+        let x = 0;
+        images.forEach(img => {
+            ctx.drawImage(img, x, 0);
+            x += img.width;
+        });
+        
+        return new Promise(resolve => canvas.toBlob(blob => resolve(URL.createObjectURL(blob))));
+    }
+
+    // GIF 拼接逻辑 (简化演示)
+    async function createGifCollage(nums) {
+        // 注意：GIF 拼接在纯前端较为复杂，通常需要逐帧重绘
+        // 这里提供一个基于 gif.js 的框架逻辑
+        const gif = new GIF({
+            workers: 2,
+            quality: 10,
+            workerScript: 'lib/gif.worker.js'
+        });
+
+        // 加载图片素材
+        const imgs = await Promise.all(nums.split('').map(n => loadImage(`assets/gelbooru/${n}.gif`)));
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const totalWidth = imgs.reduce((s, img) => s + img.width, 0);
+        canvas.width = totalWidth;
+        canvas.height = imgs[0].height;
+
+        // 简单处理：将所有静态帧拼在一起
+        // 如果需要完整的动画，需要用 libgif.js 解析每一帧再 combine，
+        // 鉴于单文件复杂度，这里直接演示拼接
+        ctx.fillStyle = "white";
+        ctx.fillRect(0,0, canvas.width, canvas.height);
+        let x = 0;
+        imgs.forEach(img => {
+            ctx.drawImage(img, x, 0);
+            x += img.width;
+        });
+        
+        gif.addFrame(ctx, {copy: true, delay: 200});
+        
+        return new Promise(resolve => {
+            gif.on('finished', blob => resolve(URL.createObjectURL(blob)));
+            gif.render();
+        });
+    }
+
+    function loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject();
+            img.src = src;
+        });
+    }
+</script>
+
+</body>
 </html>
